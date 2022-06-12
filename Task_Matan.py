@@ -113,7 +113,10 @@ def get_downscaled_sig(sig, scale):
     # ==============================#
     # Downscales signal by scale    #
     # ==============================#
-    sig_downscaled = gaussian_filter1d(sig, scale)
+    if scale<1:
+        sig_downscaled = gaussian_filter1d(sig, scale)
+    else:
+        sig_downscaled = sig
     return sig_downscaled[::int(1/scale)]
 
 def register_multiscale(sig1, sig2, scale_list):
@@ -124,19 +127,32 @@ def register_multiscale(sig1, sig2, scale_list):
     cumul_dx = 0
     dx_vec = []
     sig2_shifted = sig2
+    scale_list = [0.25, 0.5, 1]
 
     for scale in scale_list:
         sig1_downscaled = get_downscaled_sig(sig1, scale)
         sig2_downscaled = get_downscaled_sig(sig2_shifted, scale)
-        dr = solve_1d(sig1_downscaled, sig2_downscaled)
+
+        # match lengths of sig1 and sig2
+        sig1_downscaled = sig1_downscaled[:np.min([len(sig1_downscaled), len(sig2_downscaled)])]
+        sig2_downscaled = sig2_downscaled[:np.min([len(sig1_downscaled), len(sig2_downscaled)])]
+
+        dr, abc = solve_1d(sig1_downscaled, sig2_downscaled)
+        dr, abd,cde= solve_iter(sig1_downscaled, sig2_downscaled)
+
         dr = dr / scale
         cumul_dx += dr
         dx_vec.append(dr)
         dri = int(dr)
+
         # cut off the edges to avoid edge effects of the shift
-        sig2_shifted = ndi.shift(sig2_shifted , dr)
+        sig2_shifted = ndi.shift(sig2_shifted, dr)
         sig2_shifted = sig2_shifted[dri:-dri]
         sig1 = sig1[dri:-dri]
+
+        # shorten signal to the same length as sig2_shifted
+        sig1 = sig1[:np.min([len(sig1), len(sig2_shifted)])]
+        sig2_shifted = sig2_shifted[:np.min([len(sig1), len(sig2_shifted)])]
 
     return cumul_dx, sig2_shifted, dx_vec
 
@@ -144,26 +160,31 @@ x1 = load('x1.npy')
 x2 = load('x2.npy')
 
 sigma = 3
-
 x1 = gaussian_filter1d(x1, sigma=sigma)
 x2 = gaussian_filter1d(x2, sigma=sigma)
 
-plt.scatter(x1, x2)
-plt.show()
+dr, sig2_shifted = solve_1d(x1,x2)
+dr_iter, sig2_shifted, dx_vec = solve_iter(x1, x2, max_num_iter = 525)
+dr_multiscale, sig2_shifted, dx_vec = register_multiscale(x1,x2, [0.25, 0.5, 1])
 
-dr, sig2_shifted = solve_1d(x1, x2)
-print(dr)
+print('signle:', dr)
+print('iterations', dr_iter)
+print('multiscale', dr_multiscale)
 
 
-# ======================= test 1d registration
-#create 1D signal
-x = 200*np.random.uniform(0,1,450)
+
+
+# ==========================================-----------------------------------------#
+# ===== Solve for synthetic signal
+# ==============================#
+
+x = 200*np.random.uniform(0,1,1450)
 sigma = 75
 x = np.convolve(x, np.ones(sigma)/sigma, mode='same')
 
 # shift signal
 Downsample = 5
-Delta      = 18
+Delta      = 12
 sig1 = x[0::Downsample]
 sig2 = x[Delta::Downsample]
 dx = Delta/Downsample
@@ -172,9 +193,8 @@ dx = Delta/Downsample
 sig1 = sig1[:np.min([len(sig1),len(sig2)])]
 sig2 = sig2[:np.min([len(sig1),len(sig2)])]
 
-# ===== Solve
 
-sigma = 1
+sigma = 3
 
 # higher sigma will help convergence but will end un in less accurate result
 # large shifts, where linear assumption is not valid, will require relatively high sigma
@@ -185,7 +205,7 @@ smooth_sig2 = gaussian_filter1d(sig2, sigma=sigma)
 smooth_sig1 = smooth_sig1[sigma:-sigma]
 smooth_sig2 = smooth_sig2[sigma:-sigma]
 
-dr, sig2_shifted = solve_1d(sig1, sig2)
+dr, sig2_shifted = solve_1d(smooth_sig1, smooth_sig2)
 dr_iter, sig2_shifted, dx_vec = solve_iter(smooth_sig1, smooth_sig2, max_num_iter = 525)
 dr_multiscale, sig2_shifted, dx_vec = register_multiscale(smooth_sig1, smooth_sig2, [0.25, 0.5, 1])
 
@@ -194,6 +214,8 @@ print('signle:', dr)
 print('iterations', dr_iter)
 print('multiscale', dr_multiscale)
 
+
+# plots for 1d registration
 fig = px.line(dx_vec)
 fig.show()
 
@@ -202,31 +224,3 @@ fig = px.line(smooth_sig1)
 fig.add_trace(go.Scatter(y = sig2_shifted))
 fig.show()
 
-cumul_dx = 0
-dx_vec = []
-sig2_shifted = sig2
-scale_list = [0.25, 0.5, 1]
-
-for scale in scale_list:
-    sig1_downscaled = get_downscaled_sig(sig1, scale)
-    sig2_downscaled = get_downscaled_sig(sig2_shifted, scale)
-
-    # match lengths of sig1 and sig2
-    sig1_downscaled = sig1_downscaled[:np.min([len(sig1_downscaled),len(sig2_downscaled)])]
-    sig2_downscaled = sig2_downscaled[:np.min([len(sig1_downscaled),len(sig2_downscaled)])]
-
-    dr, abc = solve_1d(sig1_downscaled, sig2_downscaled)
-    dr = dr / scale
-    print(dr)
-    cumul_dx += dr
-    dx_vec.append(dr)
-    dri = int(dr)
-
-    # cut off the edges to avoid edge effects of the shift
-    sig2_shifted = ndi.shift(sig2_shifted, dr)
-    sig2_shifted = sig2_shifted[dri:-dri]
-    sig1 = sig1[dri:-dri]
-
-    # shorten signal to the same length as sig2_shifted
-    sig1 = sig1[:np.min([len(sig1),len(sig2_shifted)])]
-    sig2_shifted = sig2_shifted[:np.min([len(sig1),len(sig2_shifted)])]
