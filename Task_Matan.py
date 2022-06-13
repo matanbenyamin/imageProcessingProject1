@@ -91,7 +91,7 @@ def solve_iter(sig1,sig2, max_num_iter = 100):
         dr, sig2_shifted = solve_1d(sig1, x2)
         cumul_dx += dr
         dx_vec.append(dr)
-        dri = int(dr)
+        dri = int(np.ceil(abs(dr)))
         #cut off the edges to avoid edge effects of the shift
         x2 = sig2_shifted[dri:-dri]
         sig1 = sig1[dri:-dri]
