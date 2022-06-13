@@ -103,16 +103,27 @@ print(dr)
 
 
 # regiter 2d with iterations
+
+# generate random image
+img1 = np.random.rand(300, 300)
+img1 = gaussian_filter(img1, sigma=25)
+deltax = np.random.randint(1, 10)
+deltay = np.random.randint(1, 10)
+print(deltax, deltay)
+img2 = ndi.shift(img1, (deltax, deltay))
+img1 = img1[deltax:-deltax, deltay:-deltay]
+img2 = img2[deltax:-deltax, deltay:-deltay]
+
+
 cumul_dx = 0
 dx_vec = []
 img2_shifted = img2
-for i in range(100):
+for i in range(10):
     dr, img2_shifted = solve_2d(img1, img2_shifted)
-
     cumul_dx += dr
     dx_vec.append(dr)
     dri = dr.astype(int)
     img1 = img1[dri[0]:-dri[0], dri[1]:-dri[1]]
     img2_shifted = img2_shifted[dri[0]:-dri[0], dri[1]:-dri[1]]
     img2_shifted = ndi.shift(img2_shifted, (dr[1], dr[0]))
-print(dr)
+print(cumul_dx)
