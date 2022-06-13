@@ -26,10 +26,15 @@ def solve_2d(im1, im2):
 
 def solve_iter_2d(img1, img2, max_num_iter = 1500):
     # ==============================#
-    # Caculates registration with lsq
+    # Calculates registration with lsq
+    # Input:
+    #   img1 - image to be registered
+    #   img2 - image to be registered to
+    #   max_num_iter - maximum number of iterations(default: 1500)
     # Output:
     #   dr -  shift in each dimensiotn
-    #   im2 - shifted image based on dr
+    #   im2_shifted - shifted image based on dr
+    #   dx_vec - vector of shifts over convergence
     # ==============================#
 
     cumul_dx = 0
@@ -69,6 +74,11 @@ def register_multiscale_2d(img1, img2, scale_list = [0.25, 0.5, 1]):
     # Caculates registration with lsq
     # with multiscale registration
     # Output:
+    #   cumul_dx - shift after convergence
+    #   img2 - shifted image based on cumul_dx
+    #   dx_vec - vector of shifts over convergence
+    # ==============================#
+
     cumul_dx = 0
     dx_vec = []
     img2_shifted = img2
@@ -81,7 +91,8 @@ def register_multiscale_2d(img1, img2, scale_list = [0.25, 0.5, 1]):
         img1_downscaled = img1_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
         img2_downscaled = img2_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
 
-        dr, abc = solve_2d(img1_downscaled, img2_downscaled)
+        dr = solve_iter_2d(img1_downscaled, img2_downscaled)
+        dr = dr[0]
         dr = dr / scale
         cumul_dx += dr
         dx_vec.append(dr)
@@ -131,8 +142,6 @@ img2 = img2[deltax:-deltax, deltay:-deltay]
 cumul_dx = 0
 dx_vec = []
 img2_shifted = img2
-orig_err = np.mean(abs(np.abs(img1-img2)))
-print(orig_err)
 oimg1 = img1
 oimg2 = img2
 
@@ -191,6 +200,23 @@ for scale in scale_list:
         img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
 
 print(cumul_dx)
+
+
+
+
+# generate random image
+img1 = np.random.rand(500, 500)
+img1 = gaussian_filter(img1, sigma=5)
+deltax = np.random.randint(1, 100)
+deltay = np.random.randint(1, 100)
+print(deltax, deltay)
+img2 = ndi.shift(img1, (deltax, deltay))
+img1 = img1[deltax:-deltax, deltay:-deltay]
+img2 = img2[deltax:-deltax, deltay:-deltay]
+cumul_dx = 0
+dx_vec = []
+img2_shifted = img2
+
 
 dr = solve_2d(img1, img2)
 print('single: ', dr[0])
