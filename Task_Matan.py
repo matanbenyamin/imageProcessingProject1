@@ -92,9 +92,11 @@ def solve_iter(sig1,sig2, max_num_iter = 100):
         cumul_dx += dr
         dx_vec.append(dr)
         dri = int(dr)
+        x2 = ndi.shift(x2, dr)
         #cut off the edges to avoid edge effects of the shift
-        x2 = sig2_shifted[dri:-dri]
+        x2 = x2[dri:-dri]
         sig1 = sig1[dri:-dri]
+        sig2_shifted = x2
 
         # stop automatically if dx_vec doesnt change
         if i > 1:
