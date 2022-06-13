@@ -176,8 +176,8 @@ print('multiscale', dr_multiscale)
 # ===== Solve for synthetic signal
 # ==============================#
 
-x = 200*np.random.uniform(0,1,1450)
-sigma = 75
+x = 200*np.random.uniform(0,1,11450)
+sigma = 95
 x = np.convolve(x, np.ones(sigma)/sigma, mode='same')
 
 # shift signal
