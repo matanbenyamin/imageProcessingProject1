@@ -24,7 +24,7 @@ def solve_2d(im1, im2):
 
     return dr, im2_shifted
 
-def solve_iter_2d(im1, im2, max_num_iter = 100):
+def solve_iter_2d(im1, im2, max_num_iter = 1500):
     # ==============================#
     # Caculates registration with lsq
     # Output:
@@ -35,7 +35,7 @@ def solve_iter_2d(im1, im2, max_num_iter = 100):
     cumul_dx = 0
     dx_vec = []
     img2_shifted = im2
-    for i in range(15):
+    for i in range(max_num_iter):
         dr, img2_shifted = solve_2d(im1, img2_shifted)
         cumul_dx += dr
         dx_vec.append(dr)
@@ -44,8 +44,12 @@ def solve_iter_2d(im1, im2, max_num_iter = 100):
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-            curr_err = np.mean(abs(np.abs(img1 - img2_shifted)))
-
+            if i > 1:
+                if err < np.max(np.abs(dr)) < 0.01:
+                    print('converged at iteration: ', i)
+                    break
+    assert i < max_num_iter, 'Did not converge'
+    return cumul_dx, dx_vec, img2_shifted
 
 def get_downscaled_img_2d(img, scale, stridex = 0, stridey = 0):
     # ==============================#
@@ -111,9 +115,9 @@ print(dr)
 
 # generate random image
 img1 = np.random.rand(500, 500)
-img1 = gaussian_filter(img1, sigma=35)
-deltax = np.random.randint(1, 25)
-deltay = np.random.randint(1, 25)
+img1 = gaussian_filter(img1, sigma=15)
+deltax = np.random.randint(1, 77)
+deltay = np.random.randint(1, 75)
 print(deltax, deltay)
 img2 = ndi.shift(img1, (deltax, deltay))
 img1 = img1[deltax:-deltax, deltay:-deltay]
@@ -131,17 +135,20 @@ print('single: ', dr)
 # fig.add_trace(px.line(np.sum(img2, axis=0), color_discrete_sequence=['red']).data[0])
 # fig.show()
 
-for i in range(15):
+for i in range(150):
     dr, img2_shifted = solve_2d(img1, img2_shifted)
     cumul_dx += dr
     dx_vec.append(dr)
     # prevent overshooting
     dri = (np.ceil(abs(dr))).astype(int)
-    if dri[0]>0and dri[1]>0:
+    if dri[0]>0 and dri[1]>0:
         img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
         img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
         curr_err = np.mean(abs(np.abs(img1-img2_shifted)))
-
+    if i>1:
+        if err<np.max(np.abs(dr))<0.01:
+            print('converged at iteration: ', i)
+            break
 print(cumul_dx)
 
 
