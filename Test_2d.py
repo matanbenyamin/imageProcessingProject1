@@ -42,8 +42,6 @@ def solve_iter_2d(im1, im2, max_num_iter = 100):
         dri = dr.astype(int)
         img2_shifted = ndi.shift(img2_shifted, dr)
 
-
-
 def get_downscaled_img_2d(img, scale, stridex = 0, stridey = 0):
     # ==============================#
     # Downscales image by scale    #
@@ -102,6 +100,9 @@ img2 = img2[deltax:-deltax, deltay:-deltay]
 dr,a  = solve_2d(img1, img2)
 print(dr)
 
+
+
+# regiter 2d with iterations
 cumul_dx = 0
 dx_vec = []
 img2_shifted = img2
