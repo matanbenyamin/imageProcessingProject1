@@ -3,14 +3,11 @@
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from numpy import load
-from skimage.transform import downscale_local_mean
 import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import sklearn as sklearn
-from skimage.io import imshow, imread
-
 import numpy as np
 import plotly.express as px
 import plotly.io as pio
@@ -23,8 +20,8 @@ import scipy.ndimage as ndi
 
 
 
-import sys
-!{sys.executable} -m pip install sklearn
+# import sys
+# !{sys.executable} -m pip install sklearn
 
 
 
@@ -107,9 +104,7 @@ def solve_iter(sig1,sig2, max_num_iter = 100):
 
     return cumul_dx, sig2_shifted, dx_vec
 
-
-
-def get_downscaled_sig(sig, scale):
+def get_downscaled_sig(sig, scale, stride = 0):
     # ==============================#
     # Downscales signal by scale    #
     # ==============================#
@@ -117,7 +112,8 @@ def get_downscaled_sig(sig, scale):
         sig_downscaled = gaussian_filter1d(sig, scale)
     else:
         sig_downscaled = sig
-    return sig_downscaled[::int(1/scale)]
+    # assert stride<1/scale, 'Stride is too large'
+    return sig_downscaled[stride::int(1/scale)]
 
 def register_multiscale(sig1, sig2, scale_list):
     # ==============================#
@@ -156,6 +152,8 @@ def register_multiscale(sig1, sig2, scale_list):
 
     return cumul_dx, sig2_shifted, dx_vec
 
+
+
 x1 = load('x1.npy')
 x2 = load('x2.npy')
 
@@ -174,7 +172,7 @@ print('multiscale', dr_multiscale)
 
 
 
-# ==========================================-----------------------------------------#
+# ==============================-#
 # ===== Solve for synthetic signal
 # ==============================#
 
@@ -194,7 +192,7 @@ sig1 = sig1[:np.min([len(sig1),len(sig2)])]
 sig2 = sig2[:np.min([len(sig1),len(sig2)])]
 
 
-sigma = 3
+sigma = 1
 
 # higher sigma will help convergence but will end un in less accurate result
 # large shifts, where linear assumption is not valid, will require relatively high sigma
