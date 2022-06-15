@@ -142,6 +142,15 @@ def register_multiscale(sig1, sig2, scale_list):
 
     return cumul_dx, sig2_shifted, dx_vec
 
+def test_1d():
+    # ==============================#
+    # Tests 1d registration        #
+    # ==============================#
+    sig1 = np.load(x1file)
+    sig2 = np.load(x2file)
+
+    sig1 = np.random.rand(500)
+    delta = int()
 
 x1 = np.load(x1file)
 x2 = np.load(x2file)

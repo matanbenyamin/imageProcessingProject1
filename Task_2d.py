@@ -32,7 +32,7 @@ def solve_2d(im1, im2):
     return dr, im2_shifted
 
 
-def solve_iter_2d(img1, img2, max_num_iter=1500):
+def solve_iter_2d(img1, img2, max_num_iter=150):
     # ==============================#
     # Calculates registration with lsq
     # Input:
@@ -46,27 +46,47 @@ def solve_iter_2d(img1, img2, max_num_iter=1500):
     # ==============================#
     img1 = img1.astype(float)
     img2 = img2.astype(float)
+    dr = 0
 
-    cumul_dx = 0
+    # if smoothness < 1.5e-3:
+    #     img1_s = gaussian_filter(img1, 15)
+    #     img2_s = gaussian_filter(img2, 15)
+    #
+    #     dr = solve_2d(img1_s, img2_s)
+    #     dr = dr[0]
+    #     print(dr)
+    #     img2 = ndi.shift(img2, (dr[1], dr[0]))
+    #     dri = (np.ceil(abs(dr))).astype(int)
+    #     img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
+    #     img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
+
+
+
+
+    # initialize
+    cumul_dx =dr
     dx_vec = []
     img2_shifted = img2
-    curr_err = 0
     for i in range(150):
         dr, img2_shifted = solve_2d(img1, img2_shifted)
+
         cumul_dx += dr
         dx_vec.append(dr)
-        # prevent overshooting
+
+        #dri is the shift in each dimension integerm used to crop img1 and img2
         dri = (np.ceil(abs(dr))).astype(int)
+
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-            curr_err = np.mean(abs(np.abs(img1 - img2_shifted)))
         if i > 1:
-            if curr_err < np.max(np.abs(dr)) < 0.01:
+            # dr doesn't change much, converged
+            if np.max(np.abs(dr)) < 0.00001:
                 print('converged at iteration: ', i)
                 break
-    assert i < max_num_iter, 'Did not converge'
-    return cumul_dx, dx_vec, img2_shifted
+
+
+    return cumul_dx, img2_shifted,  dx_vec
 
 
 def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
@@ -75,7 +95,7 @@ def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
     # ==============================#
     if scale < 1:
         # gaussian filter img
-        img_downscaled = gaussian_filter(img, scale)
+        img_downscaled = gaussian_filter(img, 2/scale)
     else:
         img_downscaled = img
     # assert stride<1/scale, 'Stride is too large'
@@ -117,119 +137,43 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
 
     return cumul_dx, dx_vec, img2_shifted
 
-class test_2d:
-    def __init__(self, img1, img2):
-        self.img1 = img1
-        self.img2 = img2
+def test_2d(sigma = None, delta = None, img1 = None):
+    # ==============================#
+    # Tests 2d registration        #
+    # ==============================#
+    # img1 = cv2.imread(img_path, 0)
+    # generate random image
+
+    if img1 is None:
+        img1 = np.random.rand(500, 500)
+
+    img1  = cv2.imread(img_path, 0)
+    if delta is None:
+        delta = int(input('Enter max delta: '))
+        deltax = 2*delta*np.random.rand()-delta
+        deltay = 2*delta*np.random.rand()-delta
+    else:
+        deltax = delta
+        deltay = delta
+    if delta is None:
+        sigma = int(input('Enter sigma: '))
 
 
-# generate random image
-img1 = np.random.rand(300, 300)
-# smooth image
-img1 = gaussian_filter(img1, sigma=25)
 
-# shift image
-deltax = np.random.randint(1, 10)
-deltay = np.random.randint(1, 10)
-print(deltax, deltay)
-img2 = ndi.shift(img1, (deltax, deltay))
+    if sigma<9:
+        print('Sigma>7 is recommended')
 
-img1 = img1[deltax:-deltax, deltay:-deltay]
-img2 = img2[deltax:-deltax, deltay:-deltay]
+    # smooth image
+    img1 = gaussian_filter(img1, sigma=sigma)
+    img2 = ndi.shift(img1, (deltay, deltax))
 
-dr, a = solve_2d(img1, img2)
-print(dr)
+    print('Real:',deltax, deltay)
 
-# regiter 2d with iterations
+    dr = solve_2d(img1, img2)
+    print('single: ', dr[0])
 
-# generate random image
-img1 = np.random.rand(500, 500)
-img1 = gaussian_filter(img1, sigma=15)
-deltax = np.random.randint(1, 55)
-deltay = np.random.randint(1, 55)
-print(deltax, deltay)
-img2 = ndi.shift(img1, (deltax, deltay))
-img1 = img1[deltax:-deltax, deltay:-deltay]
-img2 = img2[deltax:-deltax, deltay:-deltay]
-cumul_dx = 0
-dx_vec = []
-img2_shifted = img2
-oimg1 = img1
-oimg2 = img2
+    dr = solve_iter_2d(img1, img2)
+    print('iterative', dr[0])
 
-dr, ee = solve_2d(img1, img2_shifted)
-print('single: ', dr)
-
-for i in range(150):
-    dr, img2_shifted = solve_2d(img1, img2_shifted)
-    cumul_dx += dr
-    dx_vec.append(dr)
-    # prevent overshooting
-    dri = (np.ceil(abs(dr))).astype(int)
-    if dri[0] > 0 and dri[1] > 0:
-        img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
-        img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-        curr_err = np.mean(abs(np.abs(img1 - img2_shifted)))
-    if i > 1:
-        if curr_err < np.max(np.abs(dr)) < 0.01:
-            print('converged at iteration: ', i)
-            break
-print(cumul_dx)
-
-# fig = px.line(np.sum(img1, axis=0))
-# fig.add_trace(px.line(np.sum(img2_shifted, axis=0), color_discrete_sequence=['red']).data[0])
-# fig.show()
-
-
-# Multiscale registration
-
-img1 = oimg1
-img2 = oimg2
-cumul_dx = 0
-dx_vec = []
-img2_shifted = img2
-scale_list = [0.25, 0.5, 1]
-
-for scale in scale_list:
-    img1_downscaled = get_downscaled_img_2d(img1, scale)
-    img2_downscaled = get_downscaled_img_2d(img2_shifted, scale)
-
-    # match lengths of img1 and img2
-    img1_downscaled = img1_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
-    img2_downscaled = img2_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
-
-    dr, abc = solve_2d(img1_downscaled, img2_downscaled)
-    dr = dr / scale
-    cumul_dx += dr
-    dx_vec.append(dr)
-    dri = (np.ceil(abs(dr))).astype(int)
-    img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
-    if dri[0] > 0 and dri[1] > 0:
-        img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
-        img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-
-print(cumul_dx)
-
-# generate random image
-# img1 = np.random.rand(500, 500)
-img1 = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-
-img1 = gaussian_filter(img1, sigma=15)
-deltax = np.random.randint(-25, 25)
-deltay = np.random.randint(-25, 25)
-print(deltax, deltay)
-img2 = ndi.shift(img1, (deltax, deltay))
-img1 = img1[abs(deltax):-abs(deltax), abs(deltay):-abs(deltay)]
-img2 = img2[abs(deltax):-abs(deltax), abs(deltay):-abs(deltay)]
-cumul_dx = 0
-dx_vec = []
-img2_shifted = img2
-
-dr = solve_2d(img1, img2)
-print('single: ', dr[0])
-
-dr = solve_iter_2d(img1, img2)
-print('iterative', dr[0])
-
-dr = register_multiscale_2d(img1, img2)
-print('multiscale', dr[0])
+    dr = register_multiscale_2d(img1, img2)
+    print('multiscale', dr[0])
