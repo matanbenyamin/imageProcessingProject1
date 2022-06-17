@@ -54,50 +54,57 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
     cumul_dx = dr
     dx_vec = []
     img2_shifted = img2
-    for i in range(max_num_iter):
+    i = 0
+    while i < (max_num_iter):
 
         # cut images to overlap zone, based on max shift of 15% of image size
-        shift = np.ceil(np.min(img1.shape) * 0.15).astype(int)
-        img1 = img1[shift:-shift, shift:-shift]
-        img2_shifted = img2_shifted[shift:-shift, shift:-shift]
-        img2 = img2[shift:-shift, shift:-shift]
+        if i == 0:
+            shift = np.ceil(np.min(img1.shape) * 0.25).astype(int)
+            img1 = img1[shift:-shift, shift:-shift]
+            img2_shifted = img2_shifted[shift:-shift, shift:-shift]
+            img2 = img2[shift:-shift, shift:-shift]
 
         dr, img2_shifted = solve_2d(img1, img2_shifted)
-
-        if dr[1] > 0.25 * img1.shape[0] or dr[0] > 0.25 * img1.shape[0]:
-            assert False, 'dr is too large'
-
-        # see if shift is reasonable at all
-        # if dr[1]>0.25*img1.shape[0] or dr[0]>0.25*img1.shape[0]:
-        #     print('skip iteration: ', i, ' because of shift: ', dr)
-        #     # use max shift and loop over directions
-        #     err = []
-        #     for indx, sign_x in enumerate([-1, 1]):
-        #         for indy, sign_y in enumerate([-1, 1]):
-        #             dr = np.array([sign_x*0.25*img1.shape[0], sign_y*0.25*img1.shape[0]])
-        #             img2_shifted_temp = ndi.shift(img2, dr)
-        #             err.append(np.sum(np.abs(img1 - img2_shifted_temp)))
-        #     sign_x = [-1,1][np.argmin(err) // 2]
-        #     sign_y = [-1,1][np.argmin(err) % 2]
-        #     print('sign_x: ', sign_x, 'sign_y: ', sign_y)
-        #     dr = np.array([sign_x*0.25*img1.shape[0], sign_y*0.25*img1.shape[0]])
-        #     img2_shifted = ndi.shift(img2_shifted, (dr[1], dr[0]))
 
         cumul_dx += dr
         dx_vec.append(dr)
 
         # dri is the shift in each dimension integerm used to crop img1 and img2
-        dri = (np.ceil(abs(dr))).astype(int)
+        dri = (np.ceil([abs(2 * x) for x in dr])).astype(int)
+
+        # dri = (np.ceil(abs(cumul_dx))).astype(int)
+        # img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
+
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
+
+        normalized_error = np.sum(np.abs(img1 - img2_shifted)) / np.sum(np.abs(img1))
+
         # check convergence after minimal number of iterations
-        if i > 35:
+        if i > 135:
             # dr doesn't change much, converged
             if np.max(np.abs(dr)) < 0.005:
-                # print('converged at iteration: ', i)
+                print('converged at iteration: ', i, ' with dr: ', dr)
                 break
+        #     else:
+        #         # set dr as quarter image size in each dimension x and y
+        #         dr = (img1.shape[0]/4, img1.shape[1]/4)
+        #         img2_shifted = ndi.shift(img2_shifted, dr)
+        #         dri = (np.ceil(abs(dr))).astype(int)
+        #         img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
+        #         img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
+        #         img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
+        #         cumul_dx += dr
+        #         dx_vec.append(dr)
+        #         i = 0
+        #         print('reshuffled')
+
+        i += 1
+
+    if i == max_num_iter - 1:
+        print('did not converge')
 
     return cumul_dx, img2_shifted, dx_vec
 
@@ -112,7 +119,8 @@ def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
     else:
         img_downscaled = img
     # assert stride<1/scale, 'Stride is too large'
-    return img_downscaled[stridex::int(1 / scale), stridey::int(1 / scale)]
+    # return img_downscaled[stridex::int(1 / scale), stridey::int(1 / scale)]
+    return img_downscaled
 
 
 def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
@@ -140,23 +148,26 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         dr = solve_iter_2d(img1_downscaled, img2_downscaled)
         dr = dr[0]
 
-        dr = dr / scale
+        if dr[1] > 0.25 * img1.shape[0] or dr[0] > 0.25 * img1.shape[0]:
+            print('calculated delta is quite large, consider reducing scale, increase sigma or increase image size')
 
-        # see if shift is reasonable at all
-        # if dr[1]>0.25*img1_downscaled.shape[0] or dr[0]>0.25*img1_downscaled.shape[0]:
-        #     print('skip scale: ', scale, ' because of shift: ', dr)
-        #     # try a smaller overlap area
-        #     continue
+        # dr = dr / scale
 
+        # update vecotrs
         cumul_dx += dr
         dx_vec.append(dr)
+
+        # cut img2 to prevent edge effects
         dri = (np.ceil(abs(dr))).astype(int)
-        prev_img2_shifted = img2_shifted
         img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
-        if dri[0] > 0 and dri[1] > 0:
+
+        dri = (np.ceil(abs(cumul_dx))).astype(int)
+        img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
+
+        if dri[0] * dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-            prev_img2_shifted = prev_img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
+            img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
 
         # prevent non useful iterations that do not get the images closer and may cause divergence
         # if np.min(img1.shape) > 0:
@@ -167,8 +178,8 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         #             cumul_dx -= dr
         #             dx_vec.pop()
         #             print('skip scale: ', scale, ' because of error: ', curr_err)
-        #
-        #     prev_err = curr_err
+
+        # prev_err = curr_err
 
     return cumul_dx, dx_vec, img2_shifted
 
