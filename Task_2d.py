@@ -6,6 +6,8 @@ from scipy.ndimage import gaussian_filter
 
 # !!! INPUT FILES - Change with your file PATH !!!
 img_path = 'img2.jpeg'
+
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 def solve_2d(im1, im2):
@@ -48,45 +50,56 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
     img2 = img2.astype(float)
     dr = 0
 
-    # if smoothness < 1.5e-3:
-    #     img1_s = gaussian_filter(img1, 15)
-    #     img2_s = gaussian_filter(img2, 15)
-    #
-    #     dr = solve_2d(img1_s, img2_s)
-    #     dr = dr[0]
-    #     print(dr)
-    #     img2 = ndi.shift(img2, (dr[1], dr[0]))
-    #     dri = (np.ceil(abs(dr))).astype(int)
-    #     img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
-    #     img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
-
-
-
-
     # initialize
-    cumul_dx =dr
+    cumul_dx = dr
     dx_vec = []
     img2_shifted = img2
-    for i in range(150):
+    for i in range(max_num_iter):
+
+        # cut images to overlap zone, based on max shift of 15% of image size
+        shift = np.ceil(np.min(img1.shape) * 0.15).astype(int)
+        img1 = img1[shift:-shift, shift:-shift]
+        img2_shifted = img2_shifted[shift:-shift, shift:-shift]
+        img2 = img2[shift:-shift, shift:-shift]
+
         dr, img2_shifted = solve_2d(img1, img2_shifted)
+
+        if dr[1] > 0.25 * img1.shape[0] or dr[0] > 0.25 * img1.shape[0]:
+            assert False, 'dr is too large'
+
+        # see if shift is reasonable at all
+        # if dr[1]>0.25*img1.shape[0] or dr[0]>0.25*img1.shape[0]:
+        #     print('skip iteration: ', i, ' because of shift: ', dr)
+        #     # use max shift and loop over directions
+        #     err = []
+        #     for indx, sign_x in enumerate([-1, 1]):
+        #         for indy, sign_y in enumerate([-1, 1]):
+        #             dr = np.array([sign_x*0.25*img1.shape[0], sign_y*0.25*img1.shape[0]])
+        #             img2_shifted_temp = ndi.shift(img2, dr)
+        #             err.append(np.sum(np.abs(img1 - img2_shifted_temp)))
+        #     sign_x = [-1,1][np.argmin(err) // 2]
+        #     sign_y = [-1,1][np.argmin(err) % 2]
+        #     print('sign_x: ', sign_x, 'sign_y: ', sign_y)
+        #     dr = np.array([sign_x*0.25*img1.shape[0], sign_y*0.25*img1.shape[0]])
+        #     img2_shifted = ndi.shift(img2_shifted, (dr[1], dr[0]))
 
         cumul_dx += dr
         dx_vec.append(dr)
 
-        #dri is the shift in each dimension integerm used to crop img1 and img2
+        # dri is the shift in each dimension integerm used to crop img1 and img2
         dri = (np.ceil(abs(dr))).astype(int)
-
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-        if i > 1:
+            img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
+        # check convergence after minimal number of iterations
+        if i > 35:
             # dr doesn't change much, converged
-            if np.max(np.abs(dr)) < 0.00001:
-                print('converged at iteration: ', i)
+            if np.max(np.abs(dr)) < 0.005:
+                # print('converged at iteration: ', i)
                 break
 
-
-    return cumul_dx, img2_shifted,  dx_vec
+    return cumul_dx, img2_shifted, dx_vec
 
 
 def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
@@ -95,7 +108,7 @@ def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
     # ==============================#
     if scale < 1:
         # gaussian filter img
-        img_downscaled = gaussian_filter(img, 2/scale)
+        img_downscaled = gaussian_filter(img, 2 / scale)
     else:
         img_downscaled = img
     # assert stride<1/scale, 'Stride is too large'
@@ -126,18 +139,41 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
 
         dr = solve_iter_2d(img1_downscaled, img2_downscaled)
         dr = dr[0]
+
         dr = dr / scale
+
+        # see if shift is reasonable at all
+        # if dr[1]>0.25*img1_downscaled.shape[0] or dr[0]>0.25*img1_downscaled.shape[0]:
+        #     print('skip scale: ', scale, ' because of shift: ', dr)
+        #     # try a smaller overlap area
+        #     continue
+
         cumul_dx += dr
         dx_vec.append(dr)
         dri = (np.ceil(abs(dr))).astype(int)
+        prev_img2_shifted = img2_shifted
         img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
+            prev_img2_shifted = prev_img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
+
+        # prevent non useful iterations that do not get the images closer and may cause divergence
+        # if np.min(img1.shape) > 0:
+        #     curr_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
+        #     if scale > 0.25:
+        #         if curr_err > 1 * prev_err:
+        #             img2_shifted = prev_img2_shifted
+        #             cumul_dx -= dr
+        #             dx_vec.pop()
+        #             print('skip scale: ', scale, ' because of error: ', curr_err)
+        #
+        #     prev_err = curr_err
 
     return cumul_dx, dx_vec, img2_shifted
 
-def test_2d(sigma = None, delta = None, img1 = None):
+
+def test_2d(sigma=None, delta=None, img1=None):
     # ==============================#
     # Tests 2d registration        #
     # ==============================#
@@ -147,27 +183,25 @@ def test_2d(sigma = None, delta = None, img1 = None):
     if img1 is None:
         img1 = np.random.rand(500, 500)
 
-    img1  = cv2.imread(img_path, 0)
+    img1 = cv2.imread(img_path, 0)
     if delta is None:
         delta = int(input('Enter max delta: '))
-        deltax = 2*delta*np.random.rand()-delta
-        deltay = 2*delta*np.random.rand()-delta
+        deltax = 2 * delta * np.random.rand() - delta
+        deltay = 2 * delta * np.random.rand() - delta
     else:
         deltax = delta
         deltay = delta
     if delta is None:
         sigma = int(input('Enter sigma: '))
 
-
-
-    if sigma<9:
+    if sigma < 9:
         print('Sigma>7 is recommended')
 
     # smooth image
     img1 = gaussian_filter(img1, sigma=sigma)
     img2 = ndi.shift(img1, (deltay, deltax))
 
-    print('Real:',deltax, deltay)
+    print('Real:', deltax, deltay)
 
     dr = solve_2d(img1, img2)
     print('single: ', dr[0])

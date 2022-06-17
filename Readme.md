@@ -13,4 +13,8 @@ A python code for 1D and 2D signals registration
    2. change signals `jpeg` file path with your file path
    3. run code
 
+
+
+# Notes & Limitations
+1. Since minimal scale is 0.25, maximal shift should be less than 0.25 * signal length
 ### created by : Matan B. and Zeev K.

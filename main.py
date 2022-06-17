@@ -1,16 +1,35 @@
-# This is a sample Python script.
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+img1 = np.random.rand(500, 500)
+deltax = 75
+deltay = 75
+sigma = 35
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+deltax = -105
+deltay = 0.958
+sigma = 1
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
+img1 = gaussian_filter(img1, sigma=sigma)
+img2 = ndi.shift(img1, (deltay, deltax))
+
+
+dr = solve_2d(img1, img2)
+print('single: ', dr[0])
+
+dr = solve_iter_2d(img1, img2)
+print('iterative', dr[0])
+
+dr = register_multiscale_2d(img1, img2)
+print('multiscale', dr[0])
+
+
+import plotly.express as px
+import plotly.io as pio
+
+
+dr = solve_iter_2d(img1, img2)
+print('iterative', dr[0])
+pio.renderers.default = "browser"
+fig = px.line(dr[2])
+fig.show()
