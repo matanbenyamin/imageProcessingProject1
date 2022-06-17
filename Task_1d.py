@@ -12,29 +12,6 @@ x2file = 'x2.npy'
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-def solve_2d(im1, im2):
-    # ==============================#
-    # Caculates registration with lsq
-    # Output:
-    #   dr -  shift in each dimensiotn
-    #   im2 - shifted image based on dr
-    # ==============================#
-
-    imx = im1[1:, 1:] - im1[1:, :-1]
-    imy = im1[1:, 1:] - im1[:-1, 1:]
-
-    A = np.transpose([imx.flatten(), imy.flatten()])
-    At = np.transpose(A)
-
-    y = im2[1:, 1:] - im1[1:, 1:]
-    y = y.flatten()
-
-    s = np.linalg.pinv(At @ A)
-    dr = s @ (At @ y)
-    im2_shifted = ndi.shift(im2, dr)
-
-    return dr, im2_shifted
-
 
 def solve_1d(sig1, sig2):
     # ==============================#

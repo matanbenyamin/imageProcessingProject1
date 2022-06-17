@@ -53,6 +53,7 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
     # initialize
     cumul_dx = dr
     dx_vec = []
+    error_vec = []
     img2_shifted = img2
     i = 0
     while i < (max_num_iter):
@@ -82,29 +83,20 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
 
         normalized_error = np.sum(np.abs(img1 - img2_shifted)) / np.sum(np.abs(img1))
 
+        error_vec.append(normalized_error)
+
         # check convergence after minimal number of iterations
-        if i > 135:
+        if i > 1350:
             # dr doesn't change much, converged
             if np.max(np.abs(dr)) < 0.005:
                 print('converged at iteration: ', i, ' with dr: ', dr)
                 break
-        #     else:
-        #         # set dr as quarter image size in each dimension x and y
-        #         dr = (img1.shape[0]/4, img1.shape[1]/4)
-        #         img2_shifted = ndi.shift(img2_shifted, dr)
-        #         dri = (np.ceil(abs(dr))).astype(int)
-        #         img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
-        #         img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
-        #         img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
-        #         cumul_dx += dr
-        #         dx_vec.append(dr)
-        #         i = 0
-        #         print('reshuffled')
 
         i += 1
 
     if i == max_num_iter - 1:
         print('did not converge')
+
 
     return cumul_dx, img2_shifted, dx_vec
 
