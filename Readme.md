@@ -17,4 +17,11 @@ A python code for 1D and 2D signals registration
 
 # Notes & Limitations
 1. Since minimal scale is 0.25, maximal shift should be less than 0.25 * signal length
+2. Signal length is important!
+3. signals shlud be saved like this
+   1. np.savez_compressed('x1.npz',x1=sig1)
+   2. np.savez_compressed('x2.npz',x2=sig2)
+5. if the signals\imagse are not of the same lengths, they are truncated to the shortest one in their end. This might have an effect
+    on the registration result.
+
 ### created by : Matan B. and Zeev K.

@@ -1,5 +1,5 @@
 from Task_2d import *
-from Task_1d_new import *
+from Task_1d import *
 
 
 img1 = np.random.rand(500, 500)
@@ -20,8 +20,13 @@ deltay = 2.5
 sigma = 5
 
 
-img1 = gaussian_filter(img1, sigma=sigma)
+# img1 = gaussian_filter(img1, sigma=sigma)
 img2 = ndi.shift(img1, (deltay, deltax))
+
+from PIL import Image
+Image.fromarray((img1 * 255).astype(np.uint8)).save('im1.bmp')
+Image.fromarray((img2 * 255).astype(np.uint8)).save('im2.bmp')
+
 
 img1 = cv2.imread('im1.bmp', 0)
 img1 = img1[:-2, :-2]

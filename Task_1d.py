@@ -1,17 +1,15 @@
+import cv2
 import argparse
 import numpy as np
-import plotly.io as pio
 import scipy.ndimage as ndi
-
-pio.renderers.default = "browser"
+from scipy.ndimage import gaussian_filter
 from scipy.ndimage import gaussian_filter1d
 
-# !!! INPUT FILES - Change with your files PATH !!!
-x1file = 'x1.npy'
-x2file = 'x2.npy'
+# !!! INPUT FILES - Change with your file PATH !!!
+img_path = 'img2.jpeg'
+
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
 
 def solve_1d(sig1, sig2):
     # ==============================#
@@ -40,154 +38,114 @@ def solve_1d(sig1, sig2):
     return dr, sig2_shifted
 
 
-def solve_iter(sig1, sig2, max_num_iter=100):
+
+
+def solve_iter_1d(sig1, sig2, max_num_iter=100):
     # ==============================#
     # Caculates registration with lsq
     # Output:
-    #   cumul_dx - shift after convergence
-    #   sig2 - shifted signal based on cumul_dx
-    #   dx_vec - vector of shifts over convergence
+    #   dr -  shift
+    #   sig2 - shifted signal based on dr
+    # ==============================#
 
+    # calculate derivative
+    sig1 = sig1.astype(float)
+    sig2 = sig2.astype(float)
+
+    # initialize
     cumul_dx = 0
     dx_vec = []
-    x2 = sig2
+    error_vec = []
+    sig2_shifted = sig2
+    i = 0
+    while i < (max_num_iter):
 
-    for i in range(max_num_iter):
-        dr, sig2_shifted = solve_1d(sig1, x2)
+        # cut signal to overlap zone, based on max shift of 15% of image size
+        if i == 0:
+            shift = np.ceil(len(sig1) * 0.25).astype(int)
+            sig1 = sig1[shift:-shift]
+            sig2 = sig2[shift:-shift]
+            sig2_shifted = sig2
+
+        dr, sig2_shifted = solve_1d(sig1, sig2_shifted)
+
         cumul_dx += dr
         dx_vec.append(dr)
-        dri = int(np.ceil(abs(dr)))
-        # cut off the edges to avoid edge effects of the shift
-        x2 = sig2_shifted[dri:-dri]
-        sig1 = sig1[dri:-dri]
 
-        # stop automatically if dx_vec doesnt change
-        if i > 1:
-            if abs(dx_vec[i - 1] - dx_vec[i - 2]) < 0.01:
-                # print('Converged after {} iterations'.format(i))
+        # dri is the shift in each dimension integerm used to crop img1 and img2
+        dri = np.ceil(abs(dr)).astype(int)
+
+
+        if dri > 0:
+            # crop sig1 and sig2
+            sig1 = sig1[dri:-dri]
+            sig2 = sig2[dri:-dri]
+            sig2_shifted = sig2_shifted[dri:-dri]
+
+        # check convergence after minimal number of iterations
+        if i > 1350:
+            # dr doesn't change much, converged
+            if abs(dr) < 0.005:
+                print('converged at iteration: ', i, ' with dr: ', dr)
                 break
+
+        i += 1
+
+    if i == max_num_iter - 1:
+        print('did not converge')
 
     return cumul_dx, sig2_shifted, dx_vec
 
 
 def get_downscaled_sig(sig, scale, stride=0):
     # ==============================#
-    # Downscales signal by scale    #
+    # Downscales image by scale    #
     # ==============================#
     if scale < 1:
-        sig_downscaled = gaussian_filter1d(sig, scale)
+        # gaussian filter img
+        sig_downscaled = gaussian_filter1d(sig, sigma=scale)
     else:
         sig_downscaled = sig
     # assert stride<1/scale, 'Stride is too large'
-    return sig_downscaled[stride::int(1 / scale)]
+    # return img_downscaled[stridex::int(1 / scale), stridey::int(1 / scale)]
+    return sig_downscaled
 
 
-def register_multiscale(sig1, sig2, scale_list):
-    # ==============================#
-    # Caculates registration with lsq
-    # with multiscale registration
-    # Output:
+def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
+
     cumul_dx = 0
     dx_vec = []
     sig2_shifted = sig2
-    scale_list = [0.25, 0.5, 1]
 
     for scale in scale_list:
         sig1_downscaled = get_downscaled_sig(sig1, scale)
         sig2_downscaled = get_downscaled_sig(sig2_shifted, scale)
 
+
         # match lengths of sig1 and sig2
         sig1_downscaled = sig1_downscaled[:np.min([len(sig1_downscaled), len(sig2_downscaled)])]
         sig2_downscaled = sig2_downscaled[:np.min([len(sig1_downscaled), len(sig2_downscaled)])]
 
-        dr, abc = solve_1d(sig1_downscaled, sig2_downscaled)
-        dr, abd, cde = solve_iter(sig1_downscaled, sig2_downscaled)
+        dr = solve_iter_1d(sig1_downscaled, sig2_downscaled)[0]
+        # dr = dr[0]
 
-        dr = dr / scale
+        # dr = dr / scale
+
+        # update vecotrs
         cumul_dx += dr
         dx_vec.append(dr)
-        dri = int(dr)
 
-        # cut off the edges to avoid edge effects of the shift
-        sig2_shifted = ndi.shift(sig2_shifted, dr)
-        sig2_shifted = sig2_shifted[dri:-dri]
-        sig1 = sig1[dri:-dri]
+        # cut img2 to prevent edge effects
+        # dri = (np.ceil(abs(dr))).astype(int)
+        # img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
 
-        # shorten signal to the same length as sig2_shifted
-        sig1 = sig1[:np.min([len(sig1), len(sig2_shifted)])]
-        sig2_shifted = sig2_shifted[:np.min([len(sig1), len(sig2_shifted)])]
+        dri = (np.ceil(abs(cumul_dx))).astype(int)
+        sig2_shifted = ndi.shift(sig2, cumul_dx)
 
-    return cumul_dx, sig2_shifted, dx_vec
+        if dri > 0:
+            sig1 = sig1[dri:-dri]
+            sig2 = sig2[dri:-dri]
+            sig2_shifted = sig2_shifted[dri:-dri]
 
-def test_1d():
-    # ==============================#
-    # Tests 1d registration        #
-    # ==============================#
-    sig1 = np.load(x1file)
-    sig2 = np.load(x2file)
+    return cumul_dx, dx_vec, sig2_shifted
 
-    sig1 = np.random.rand(500)
-    delta = int()
-
-x1 = np.load(x1file)
-x2 = np.load(x2file)
-
-sigma = 3
-x1 = gaussian_filter1d(x1, sigma=sigma)
-x2 = gaussian_filter1d(x2, sigma=sigma)
-
-dr, sig2_shifted = solve_1d(x1, x2)
-dr_iter, sig2_shifted, dx_vec = solve_iter(x1, x2, max_num_iter=525)
-dr_multiscale, sig2_shifted, dx_vec = register_multiscale(x1, x2, [0.25, 0.5, 1])
-
-print('signle:', np.round(dr, 3))
-print('iterations', np.round(dr_iter, 3))
-print('multiscale', np.round(dr_multiscale, 3))
-print()
-
-# ==============================-#
-# ===== Solve for synthetic signal
-# ==============================#
-
-x = 200 * np.random.uniform(0, 1, 1150)
-sigma = 95
-x = np.convolve(x, np.ones(sigma) / sigma, mode='same')
-
-# shift signal
-Downsample = 5
-Delta = 12
-sig1 = x[0::Downsample]
-sig2 = x[Delta::Downsample]
-dx = Delta / Downsample
-
-# shorten signal
-sig1 = sig1[:np.min([len(sig1), len(sig2)])]
-sig2 = sig2[:np.min([len(sig1), len(sig2)])]
-
-sigma = 1
-
-# higher sigma will help convergence but will end un in less accurate result
-# large shifts, where linear assumption is not valid, will require relatively high sigma
-
-smooth_sig1 = gaussian_filter1d(sig1, sigma=sigma)
-smooth_sig2 = gaussian_filter1d(sig2, sigma=sigma)
-
-smooth_sig1 = smooth_sig1[sigma:-sigma]
-smooth_sig2 = smooth_sig2[sigma:-sigma]
-
-dr, sig2_shifted = solve_1d(smooth_sig1, smooth_sig2)
-dr_iter, sig2_shifted, dx_vec = solve_iter(smooth_sig1, smooth_sig2, max_num_iter=525)
-dr_multiscale, sig2_shifted, dx_vec = register_multiscale(smooth_sig1, smooth_sig2, [0.25, 0.5, 1])
-
-print('original:', np.round(dx, 3))
-print('signle:', np.round(dr, 3))
-print('iterations', np.round(dr_iter, 3))
-print('multiscale', np.round(dr_multiscale, 3))
-
-# plots for 1d registration
-# fig = px.line(dx_vec)
-# fig.show()
-#
-# fig = px.line(smooth_sig1)
-# fig.add_trace(go.Scatter(y=sig2_shifted))
-# fig.show()
