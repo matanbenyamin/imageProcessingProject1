@@ -81,22 +81,20 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
 
-        normalized_error = np.sum(np.abs(img1 - img2_shifted)) / np.sum(np.abs(img1))
-
-        error_vec.append(normalized_error)
+        # normalized_error = np.sum(np.abs(img1 - img2_shifted)) / np.sum(np.abs(img1))
+        # error_vec.append(normalized_error)
 
         # check convergence after minimal number of iterations
         if i > 1350:
             # dr doesn't change much, converged
             if np.max(np.abs(dr)) < 0.005:
-                print('converged at iteration: ', i, ' with dr: ', dr)
+                # print('converged at iteration: ', i, ' with dr: ', dr)
                 break
 
         i += 1
 
     if i == max_num_iter - 1:
         print('did not converge')
-
 
     return cumul_dx, img2_shifted, dx_vec
 
@@ -156,22 +154,30 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         dri = (np.ceil(abs(cumul_dx))).astype(int)
         img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
 
-        if dri[0] * dri[1] > 0:
+        if dri[0] * dri[1] > 0 and np.max(dri) < 0.25 * np.min(img1.shape):
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
+        else:
+            # dr is too large and completely outside of img1
+            img2_shifted = img2
+            cumul_dx -= dr
+            dx_vec.pop()
+            prev_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
+            continue
 
         # prevent non useful iterations that do not get the images closer and may cause divergence
-        # if np.min(img1.shape) > 0:
-        #     curr_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
-        #     if scale > 0.25:
-        #         if curr_err > 1 * prev_err:
-        #             img2_shifted = prev_img2_shifted
-        #             cumul_dx -= dr
-        #             dx_vec.pop()
-        #             print('skip scale: ', scale, ' because of error: ', curr_err)
-
-        # prev_err = curr_err
+        if np.min(img1.shape) > 0:
+            curr_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
+            if scale > scale_list[0]:
+                if curr_err > 1 * prev_err:
+                    img2_shifted = img2
+                    cumul_dx -= dr
+                    dx_vec.pop()
+                    print('skip scale: ', scale, ' because of error: ', curr_err)
+        else:
+            curr_err = 1e5
+        prev_err = curr_err
 
     return cumul_dx, dx_vec, img2_shifted
 
@@ -214,3 +220,52 @@ def test_2d(sigma=None, delta=None, img1=None):
 
     dr = register_multiscale_2d(img1, img2)
     print('multiscale', dr[0])
+
+
+def sigma_optimizer_2d(img1, img2, method, sigma_list=list(range(1, 75, 6))):
+    # ==============================#
+    # Optimizes sigma for 2d        #
+    # ==============================#
+    # Input:
+    #   img1 - image 1
+    #   img2 - image 2
+    #   method - method to use for registration
+    #       'iterative' - iterative method
+    #       'multiscale' - multiscale method
+    #   sigma_list - list of sigmas to test
+
+    # Output:
+    #   dr for optimal sigma
+    #   sigma - optimal sigma
+    # ==============================#
+
+    # assumption: better registration results in lower error
+
+    error_vec = []
+    dr_list = []
+    for sigma in sigma_list:
+        im1 = gaussian_filter(img1, sigma=sigma)
+        im2 = gaussian_filter(img2, sigma=sigma)
+
+        if method == 'iterative':
+            dr = solve_iter_2d(im1, im2)
+        elif method == 'multiscale':
+            dr = register_multiscale_2d(im1, im2)
+        dr_list.append(dr[0])
+
+        im2_t = ndi.shift(img2, dr[0])
+        dri = (np.ceil(abs(dr[0]))).astype(int)
+        im1_t = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
+        im2_t = im2_t[dri[1]:-dri[1], dri[0]:-dri[0]]
+
+        if np.max(dr[0]) < 0.25 * np.min(img1.shape):
+            error = np.nanmedian(np.abs(im1_t - im2_t))
+        else:
+            error = 1e8
+
+        if error == 0:
+            error = 1e5
+        # print('sigma: ', sigma, ' error: ', error, ' dr: ', dr[0])
+        error_vec.append(error)
+
+    return dr_list[np.nanargmin(error_vec)], sigma_list[np.nanargmin(error_vec)]

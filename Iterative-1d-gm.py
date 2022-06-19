@@ -10,15 +10,30 @@ import sys
 sig1 = np.load(sys.argv[1])['x1']
 sig2 = np.load(sys.argv[2])['x2']
 
-# smooth
-sigma = 1
-sig1 = gaussian_filter1d(sig1, sigma=sigma)
-sig2 = gaussian_filter1d(sig2, sigma=sigma)
 
 # validate signal lengths
 sig1 = sig1[:np.min([len(sig1), len(sig2)])]
 sig2 = sig2[:np.min([len(sig1), len(sig2)])]
 
-# solve iterative
-dx = solve_iter_1d(sig1, sig2, max_num_iter=125)[0]
-print('dx (iterative registration):', np.round(dx, 3))
+
+osig1 = sig1
+osig2 = sig2
+
+# smooth
+sigma = 9
+sig1 = gaussian_filter1d(sig1, sigma=sigma)
+sig2 = gaussian_filter1d(sig2, sigma=sigma)
+
+
+
+# Alternatively, run the automatic sigma selection:
+if len(sys.argv) > 3 and sys.argv[3] == 'auto':
+    dx = sigma_optimizer_1d(osig1, osig2, method = 'iterative')
+    print(np.round(-dx[0], 3))
+    print('sigma', np.round(dx[1], 3))
+else:
+    # solve iterative
+    dx = solve_iter_1d(sig1, sig2)[0]
+    print(np.round(-dx, 3))
+
+

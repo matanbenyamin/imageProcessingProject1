@@ -13,6 +13,9 @@ img_path = 'img2.jpeg'
 
 def solve_1d(sig1, sig2):
     # ==============================#
+    # Input:
+    #   sig1 - signal 1
+
     # Caculates registration with lsq
     # Output:
     #   dr -  shift in each dimensiotn
@@ -25,6 +28,7 @@ def solve_1d(sig1, sig2):
     # add zeros colum to use pinv
     A = np.c_[A, np.zeros_like(A)]
 
+    #realize least squares
     At = np.transpose(A)
     y = sig2 - sig1
     y = y[1:-1]
@@ -43,6 +47,7 @@ def solve_1d(sig1, sig2):
 def solve_iter_1d(sig1, sig2, max_num_iter=100):
     # ==============================#
     # Caculates registration with lsq
+    # relaizes iterative least squares using solve_1d
     # Output:
     #   dr -  shift
     #   sig2 - shifted signal based on dr
@@ -55,7 +60,7 @@ def solve_iter_1d(sig1, sig2, max_num_iter=100):
     # initialize
     cumul_dx = 0
     dx_vec = []
-    error_vec = []
+
     sig2_shifted = sig2
     i = 0
     while i < (max_num_iter):
@@ -69,6 +74,7 @@ def solve_iter_1d(sig1, sig2, max_num_iter=100):
 
         dr, sig2_shifted = solve_1d(sig1, sig2_shifted)
 
+        # store dr
         cumul_dx += dr
         dx_vec.append(dr)
 
@@ -83,7 +89,7 @@ def solve_iter_1d(sig1, sig2, max_num_iter=100):
             sig2_shifted = sig2_shifted[dri:-dri]
 
         # check convergence after minimal number of iterations
-        if i > 1350:
+        if i > 135:
             # dr doesn't change much, converged
             if abs(dr) < 0.005:
                 print('converged at iteration: ', i, ' with dr: ', dr)
@@ -99,7 +105,8 @@ def solve_iter_1d(sig1, sig2, max_num_iter=100):
 
 def get_downscaled_sig(sig, scale, stride=0):
     # ==============================#
-    # Downscales image by scale    #
+    # Downscales image by scale     #
+    # This actually just smoothes each scale by a gaussian filter
     # ==============================#
     if scale < 1:
         # gaussian filter img
@@ -107,11 +114,23 @@ def get_downscaled_sig(sig, scale, stride=0):
     else:
         sig_downscaled = sig
     # assert stride<1/scale, 'Stride is too large'
-    # return img_downscaled[stridex::int(1 / scale), stridey::int(1 / scale)]
+    # return sig_downscaled[stride::int(1/scale)]
     return sig_downscaled
 
 
 def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
+    # ==============================#
+    # performs registration of sig1 to sig2
+    # in several scales (increasing)
+    # Input:
+    #   sig1 - signal 1
+    #   sig2 - signal 2
+    #   scale_list - list of scales to downscale
+    # Output:
+    #   dr - list of shifts in each dimension
+    #   sig2_shifted - list of shifted signals
+    # ==============================#
+
 
     cumul_dx = 0
     dx_vec = []
@@ -127,7 +146,6 @@ def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
         sig2_downscaled = sig2_downscaled[:np.min([len(sig1_downscaled), len(sig2_downscaled)])]
 
         dr = solve_iter_1d(sig1_downscaled, sig2_downscaled)[0]
-        # dr = dr[0]
 
         # dr = dr / scale
 
@@ -136,9 +154,6 @@ def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
         dx_vec.append(dr)
 
         # cut img2 to prevent edge effects
-        # dri = (np.ceil(abs(dr))).astype(int)
-        # img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
-
         dri = (np.ceil(abs(cumul_dx))).astype(int)
         sig2_shifted = ndi.shift(sig2, cumul_dx)
 
@@ -149,3 +164,41 @@ def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
 
     return cumul_dx, dx_vec, sig2_shifted
 
+
+def sigma_optimizer_1d(sig1, sig2, method, sigma_list = list(range(1,75,4))):
+    # ==============================#
+    # Optimizes sigma for 1d        #
+    # ==============================#
+    # Input:
+    #   sig1 - signal 1
+    #   sig2 - signal 2
+    #   method - method to use for registration
+    #       'iterative' - iterative method
+    #       'multiscale' - multiscale method
+    #   sigma_list - list of sigmas to test
+
+    # Output:
+    #   dr for optimal sigma
+    #   sigma - optimal sigma
+    # ==============================#
+
+    # assumption: better registration results in lower error
+    error_vec = []
+    dr_list = []
+    for sigma in sigma_list:
+        x1 = gaussian_filter1d(sig1, sigma=sigma)
+        x2 = gaussian_filter1d(sig2, sigma=sigma)
+
+        if method == 'iterative':
+            dr = solve_iter_1d(x1, x2)
+        elif method == 'multiscale':
+            dr = register_multiscale_1d(x1, x2)
+
+        dr_list.append(dr[0])
+        x2 = ndi.shift(sig2, dr[0])
+        dri = int((np.ceil(abs(dr[0]))))
+        sig1_t = sig1[dri:-dri]
+        sig2_t = x2[dri:-dri]
+        error_vec.append(np.nanmedian(np.abs(sig1_t - sig2_t)))
+        # print('sigma: ', sigma, ' error: ', error_vec[-1], ' dr: ', dr_list[-1])
+    return dr_list[np.nanargmin(error_vec)], sigma_list[np.nanargmin(error_vec)]
