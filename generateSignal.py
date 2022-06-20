@@ -6,8 +6,8 @@ import scipy.ndimage as ndi
 import cv2
 
 sigma = 1
-deltax = -44
-deltay = 34.34
+deltax = -21
+deltay = 1.84
 
 img1 = np.random.rand(500, 500)
 img1 = gaussian_filter(img1, sigma=sigma)

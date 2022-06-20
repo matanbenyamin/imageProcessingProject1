@@ -152,7 +152,13 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
 
         dri = (np.ceil(abs(cumul_dx))).astype(int)
+
+        # shift the image
+        # img2_shifted = shift_img_bilinear(img2, cumul_dx[1], cumul_dx[0])
+
+        # Results are the same but it is much faster with ndi.shift
         img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
+
 
         if dri[0] * dri[1] > 0 and np.max(dri) < 0.25 * np.min(img1.shape):
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
@@ -181,6 +187,54 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
 
     return cumul_dx, dx_vec, img2_shifted
 
+
+def bilinear_subpixel_interpolation(img, x, y):
+    # ==============================#
+    # Bilinear interpolation        #
+    # ==============================#
+    x = np.round(x,3)
+    y = np.round(y,3)
+    x = np.clip(x, 0, img.shape[1]-1)
+    y = np.clip(y, 0, img.shape[0]-1)
+    x0 = np.floor(x).astype(int)
+    y0 = np.floor(y).astype(int)
+    x1 = x0 + 1
+    y1 = y0 + 1
+    x0 = np.clip(x0, 0, img.shape[1]-1)
+    y0 = np.clip(y0, 0, img.shape[0]-1)
+    x1 = np.clip(x1, 0, img.shape[1]-1)
+    y1 = np.clip(y1, 0, img.shape[0]-1)
+    Ia = img[y0, x0]
+    Ib = img[y1, x0]
+    Ic = img[y0, x1]
+    Id = img[y1, x1]
+    wa = (x1 - x) * (y1 - y)
+    wb = (x1 - x) * (y - y0)
+    wc = (x - x0) * (y1 - y)
+    wd = (x - x0) * (y - y0)
+    return wa * Ia + wb * Ib + wc * Ic + wd * Id
+
+def shift_img_bilinear(img, dx, dy):
+    # ==============================#
+    # Bilinear interpolation        #
+    # ==============================#
+    img_shifted = np.zeros(img.shape)
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            img_shifted[i, j] = bilinear_subpixel_interpolation(img, j - dx, i - dy)
+
+    return img_shifted
+
+# import plotly.graph_objects as go
+# import plotly.express as px
+# import plotly.io as pio
+# pio.renderers.default = "browser"
+# y = np.sum(shift_img_bilinear(img1[:50,:50],-0.5,-0.5), axis=0)
+# y2 = np.sum(ndi.shift(img1[:50,:50],(-0.5,-0.5)), axis=0)
+# fig = px.line(y=y)
+# fig.add_trace(go.Scatter(x=np.arange(len(y)), y=y2, name='shifted'))
+# fig.show()
+#
 
 def test_2d(sigma=None, delta=None, img1=None):
     # ==============================#
