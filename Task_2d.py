@@ -85,7 +85,7 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
         # error_vec.append(normalized_error)
 
         # check convergence after minimal number of iterations
-        if i > 1350:
+        if i > max_num_iter:
             # dr doesn't change much, converged
             if np.max(np.abs(dr)) < 0.005:
                 # print('converged at iteration: ', i, ' with dr: ', dr)
@@ -148,8 +148,8 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         dx_vec.append(dr)
 
         # cut img2 to prevent edge effects
-        dri = (np.ceil(abs(dr))).astype(int)
-        img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
+        # dri = (np.ceil(abs(dr))).astype(int)
+        # img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
 
         dri = (np.ceil(abs(cumul_dx))).astype(int)
 
@@ -307,13 +307,17 @@ def sigma_optimizer_2d(img1, img2, method, sigma_list=list(range(1, 75, 6))):
             dr = register_multiscale_2d(im1, im2)
         dr_list.append(dr[0])
 
-        im2_t = ndi.shift(img2, dr[0])
+        im2_t = ndi.shift(img2, [dr[0][1], dr[0][0]])
         dri = (np.ceil(abs(dr[0]))).astype(int)
         im1_t = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
         im2_t = im2_t[dri[1]:-dri[1], dri[0]:-dri[0]]
 
         if np.max(dr[0]) < 0.25 * np.min(img1.shape):
             error = np.nanmedian(np.abs(im1_t - im2_t))
+            # get 2d correlation coefficient of projection
+            corr = np.corrcoef(np.sum(im1_t, axis=0), np.sum(im2_t, axis=0))[0, 1]
+            error = 1-corr
+            # print(sigma, error, corr)
         else:
             error = 1e8
 

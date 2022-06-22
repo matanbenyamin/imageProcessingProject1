@@ -141,9 +141,3 @@ fig.show()
 fig.write_html("1D.html")
 
 
-
-
-
-
-
-

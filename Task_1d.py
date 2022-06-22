@@ -164,6 +164,18 @@ def register_multiscale_1d(sig1, sig2, scale_list = [0.25,0.5,1]):
 
     return cumul_dx, dx_vec, sig2_shifted
 
+def subsample_shift_by_interpolation(sig, dx):
+    # ==============================#
+    # shifts signal by dx using linear interpolation
+    # Input:
+    #   sig - signal
+    #   dx - shift
+    # Output:
+    #   sig_shifted - shifted signal
+    # ==============================#
+    sig_shifted = interp1d(np.arange(len(sig)), sig, kind='linear')(np.arange(len(sig)) + dx)
+
+    return sig_shifted
 
 def sigma_optimizer_1d(sig1, sig2, method, sigma_list = list(range(1,75,4))):
     # ==============================#

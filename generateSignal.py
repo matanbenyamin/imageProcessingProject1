@@ -6,10 +6,10 @@ import scipy.ndimage as ndi
 import cv2
 
 sigma = 1
-deltax = -21
-deltay = 1.84
+deltax = -1.2
+deltay = 3.84
 
-img1 = np.random.rand(500, 500)
+img1 = np.random.rand(250, 250)
 img1 = gaussian_filter(img1, sigma=sigma)
 img2 = ndi.shift(img1, (deltay, deltax))
 
