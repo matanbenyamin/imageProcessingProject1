@@ -28,7 +28,8 @@ A python code for 1D and 2D signals registration
    2. np.savez_compressed('x2.npz',x2=sig2)
 4. if the signals\imagse are not of the same lengths, they are truncated to the shortest one in their end. This might have an effect
     on the registration result.
-5. generateSignals is a function that generates random signals. You can use it to generate your own signals.
+5. generateSignals is a function that generates random signals. You can use it to generate your own signals. You can change the shift between the images and signals, and the amount of smoothing the images. no smoothing at all = linearity assumption does not stand. too much smoothing is also not good, as it is hard to notice a shift in a constant signal
+6. the images will be saved in the working directory
 
 # Performance Analysis
 The attached Tests.py  file contains the performance analysis of the registration.

@@ -4,10 +4,6 @@ import numpy as np
 import scipy.ndimage as ndi
 from scipy.ndimage import gaussian_filter
 
-# !!! INPUT FILES - Change with your file PATH !!!
-img_path = 'img2.jpeg'
-
-
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 def solve_2d(im1, im2):
@@ -34,7 +30,7 @@ def solve_2d(im1, im2):
     return dr, im2_shifted
 
 
-def solve_iter_2d(img1, img2, max_num_iter=150):
+def solve_iter_2d(img1, img2, max_num_iter=250):
     # ==============================#
     # Calculates registration with lsq
     # Input:
@@ -50,6 +46,10 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
     img2 = img2.astype(float)
     dr = 0
 
+    # save original copies since eahc shift deletes some of the image
+    oimg1 = img1.copy()
+    oimg2 = img2.copy()
+
     # initialize
     cumul_dx = dr
     dx_vec = []
@@ -59,33 +59,37 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
     while i < (max_num_iter):
 
         # cut images to overlap zone, based on max shift of 15% of image size
-        if i == 0:
-            shift = np.ceil(np.min(img1.shape) * 0.25).astype(int)
-            img1 = img1[shift:-shift, shift:-shift]
-            img2_shifted = img2_shifted[shift:-shift, shift:-shift]
-            img2 = img2[shift:-shift, shift:-shift]
+        # if i == 0:
+        #     shift = np.ceil(np.min(img1.shape) * 0.15).astype(int)
+        #     img1 = img1[shift:-shift, shift:-shift]
+        #     img2_shifted = img2_shifted[shift:-shift, shift:-shift]
+        #     img2 = img2[shift:-shift, shift:-shift]
 
-        dr, img2_shifted = solve_2d(img1, img2_shifted)
-
+        dr = solve_2d(img1, img2_shifted)
+        dr = dr[0]
         cumul_dx += dr
         dx_vec.append(dr)
 
         # dri is the shift in each dimension integerm used to crop img1 and img2
-        dri = (np.ceil([abs(2 * x) for x in dr])).astype(int)
+        dri = (np.ceil(abs(4*cumul_dx))).astype(int)
 
-        # dri = (np.ceil(abs(cumul_dx))).astype(int)
-        # img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
+        # get the original copies in the original size to prevent the image from getting smaller
+        img1 = oimg1
+        img2 = oimg2
+        img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
 
         if dri[0] > 0 and dri[1] > 0:
             img1 = img1[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2_shifted = img2_shifted[dri[1]:-dri[1], dri[0]:-dri[0]]
             img2 = img2[dri[1]:-dri[1], dri[0]:-dri[0]]
 
-        # normalized_error = np.sum(np.abs(img1 - img2_shifted)) / np.sum(np.abs(img1))
-        # error_vec.append(normalized_error)
+
+        # break if img is too small because it drags bad calculation
+        if np.min(img1.shape) < 70:
+            break
 
         # check convergence after minimal number of iterations
-        if i > 1350:
+        if i > 150:
             # dr doesn't change much, converged
             if np.max(np.abs(dr)) < 0.005:
                 # print('converged at iteration: ', i, ' with dr: ', dr)
@@ -93,8 +97,9 @@ def solve_iter_2d(img1, img2, max_num_iter=150):
 
         i += 1
 
-    if i == max_num_iter - 1:
+    if i == max_num_iter:
         print('did not converge')
+
 
     return cumul_dx, img2_shifted, dx_vec
 
@@ -110,6 +115,7 @@ def get_downscaled_img_2d(img, scale, stridex=0, stridey=0):
         img_downscaled = img
     # assert stride<1/scale, 'Stride is too large'
     # return img_downscaled[stridex::int(1 / scale), stridey::int(1 / scale)]
+    # gives better results to keep the image in the original size and just adjst the sigma by scale
     return img_downscaled
 
 
@@ -122,7 +128,12 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
     #   img2 - shifted image based on cumul_dx
     #   dx_vec - vector of shifts over convergence
     # ==============================#
+    img1 = img1.astype(float)
+    img2 = img2.astype(float)
 
+    # save original copies since eahc shift deletes some of the image
+    oimg1 = img1.copy()
+    oimg2 = img2.copy()
     cumul_dx = 0
     dx_vec = []
     img2_shifted = img2
@@ -135,12 +146,17 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         img1_downscaled = img1_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
         img2_downscaled = img2_downscaled[:np.min([len(img1_downscaled), len(img2_downscaled)])]
 
+        # continue if img is too small because it drags bad calculation
+        if np.min(img1_downscaled.shape) < 150:
+            continue
+
         dr = solve_iter_2d(img1_downscaled, img2_downscaled)
         dr = dr[0]
 
         if dr[1] > 0.25 * img1.shape[0] or dr[0] > 0.25 * img1.shape[0]:
             print('calculated delta is quite large, consider reducing scale, increase sigma or increase image size')
 
+        # gives better results to keep the image in the original size and just adjst the sigma by scale
         # dr = dr / scale
 
         # update vecotrs
@@ -148,15 +164,15 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
         dx_vec.append(dr)
 
         # cut img2 to prevent edge effects
-        dri = (np.ceil(abs(dr))).astype(int)
-        img2_shifted = ndi.shift(img2_shifted, [dr[1], dr[0]])
+        dri = (np.ceil(abs(2*cumul_dx))).astype(int)
 
-        dri = (np.ceil(abs(cumul_dx))).astype(int)
+        # get the original copies in the original size to prevent the image from getting smaller
+        img1 = oimg1
+        img2 = oimg2
 
-        # shift the image
+        # ==== shift the image with bilinear interpolation
         # img2_shifted = shift_img_bilinear(img2, cumul_dx[1], cumul_dx[0])
-
-        # Results are the same but it is much faster with ndi.shift
+        # === Results are the same but it is much faster with ndi.shift
         img2_shifted = ndi.shift(img2, [cumul_dx[1], cumul_dx[0]])
 
 
@@ -173,17 +189,17 @@ def register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1]):
             continue
 
         # prevent non useful iterations that do not get the images closer and may cause divergence
-        if np.min(img1.shape) > 0:
-            curr_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
-            if scale > scale_list[0]:
-                if curr_err > 1 * prev_err:
-                    img2_shifted = img2
-                    cumul_dx -= dr
-                    dx_vec.pop()
-                    print('skip scale: ', scale, ' because of error: ', curr_err)
-        else:
-            curr_err = 1e5
-        prev_err = curr_err
+        # if np.min(img1.shape) > 0:
+        #     curr_err = np.linalg.norm(img1 / np.max(img1) - img2_shifted / np.max(img2_shifted))
+        #     if scale > scale_list[0]:
+        #         if curr_err > 1 * prev_err:
+        #             img2_shifted = img2
+        #             cumul_dx -= dr
+        #             dx_vec.pop()
+        #             print('skip scale: ', scale, ' because of error: ', curr_err)
+        # else:
+        #     curr_err = 1e5
+        # prev_err = curr_err
 
     return cumul_dx, dx_vec, img2_shifted
 

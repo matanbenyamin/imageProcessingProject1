@@ -23,6 +23,6 @@ if len(sys.argv) > 3 and sys.argv[3] == 'auto':
     print('sigma', np.round(dx[1], 3))
 else:
     # solve iterative
-    dx = register_multiscale_2d(img1, img2, scale_list=[ 0.25, 0.5, 1])[0]
+    dx = register_multiscale_2d(img1, img2, scale_list=[0.25, 0.5, 1])[0]
     print(np.round(-dx, 3))
 

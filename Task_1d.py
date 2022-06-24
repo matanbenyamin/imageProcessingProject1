@@ -88,6 +88,11 @@ def solve_iter_1d(sig1, sig2, max_num_iter=100):
             sig2 = sig2[dri:-dri]
             sig2_shifted = sig2_shifted[dri:-dri]
 
+        # break if the signal is too short - it causes bad results
+        if len(sig1) < 50:
+            break
+
+
         # check convergence after minimal number of iterations
         if i > 135:
             # dr doesn't change much, converged
